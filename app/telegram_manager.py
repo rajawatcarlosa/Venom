@@ -1,7 +1,5 @@
 """
-Telegram Manager Module
-Handles all Telegram API interactions using Telethon library.
-Manages account connections, group loading, and message sending.
+Telegram Manager - Fixed version with proper 2FA and OTP handling
 """
 
 import asyncio
@@ -11,7 +9,8 @@ from telethon.errors import (
     SessionPasswordNeededError,
     FloodWaitError,
     UnauthorizedError,
-    PhoneNumberInvalidError
+    PhoneNumberInvalidError,
+    PhoneCodeInvalidError
 )
 from telethon.tl.types import Chat, Channel, User
 from app.config import Config
@@ -20,35 +19,17 @@ from app.models import (
     add_group, clear_groups_for_account, add_log
 )
 
-# Dictionary to store active client instances
 active_clients = {}
 
 class TelegramManager:
-    """
-    Manages Telegram account connections and operations.
-    
-    Attributes:
-        client (TelegramClient): Telethon client instance
-        account_id (int): Associated account ID in database
-        phone_number (str): Telegram phone number
-    """
+    """Manages Telegram connections"""
     
     def __init__(self, api_id, api_hash, phone_number, account_id=None):
-        """
-        Initialize Telegram Manager.
-        
-        Args:
-            api_id (int): Telegram API ID
-            api_hash (str): Telegram API hash
-            phone_number (str): Telegram phone number
-            account_id (int, optional): Database account ID
-        """
         self.api_id = api_id
         self.api_hash = api_hash
         self.phone_number = phone_number
         self.account_id = account_id
         
-        # Create session file path
         session_file = os.path.join(Config.SESSION_PATH, f"{phone_number.replace('+', '')}.session")
         
         self.client = TelegramClient(
@@ -61,25 +42,14 @@ class TelegramManager:
             request_retries=3
         )
     
-    async def connect_and_login(self, verification_callback=None):
-        """
-        Connect to Telegram and perform login if needed.
-        
-        Args:
-            verification_callback (callable, optional): Callback for 2FA code
-            
-        Returns:
-            dict: Login result with status and user info
-        """
+    async def send_login_code(self):
+        """Send OTP code"""
         try:
-            # Connect to Telegram
             await self.client.connect()
-            add_log(self.account_id, self.account_id, f'Connected to Telegram for {self.phone_number}')
+            add_log(self.account_id, self.account_id, f'Connected for {self.phone_number}')
             
-            # Check if already authorized
             if await self.client.is_user_authorized():
                 user = await self.client.get_me()
-                add_log(self.account_id, self.account_id, f'Account {self.phone_number} already authorized')
                 return {
                     'success': True,
                     'authorized': True,
@@ -90,19 +60,44 @@ class TelegramManager:
                     'is_bot': user.bot
                 }
             
-            # Start new login
+            await self.client.send_code_request(self.phone_number)
+            add_log(self.account_id, self.account_id, f'Code sent to {self.phone_number}')
+            
+            return {'success': True, 'message': 'OTP sent to your Telegram'}
+            
+        except PhoneNumberInvalidError:
+            return {'success': False, 'message': 'Invalid phone. Use +1234567890 format'}
+        except Exception as e:
+            return {'success': False, 'message': str(e)}
+    
+    async def connect_and_login(self, verification_callback=None, password_callback=None):
+        """Connect and login with OTP and 2FA"""
+        try:
+            await self.client.connect()
+            add_log(self.account_id, self.account_id, f'Connected for {self.phone_number}')
+            
+            if await self.client.is_user_authorized():
+                user = await self.client.get_me()
+                return {
+                    'success': True,
+                    'user_id': user.id,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name if user.last_name else '',
+                    'username': user.username if user.username else '',
+                    'is_bot': user.bot
+                }
+            
             await self.client.start(
                 phone=self.phone_number,
                 code_callback=verification_callback,
-                password=None  # Password handled separately
+                password=password_callback
             )
             
             user = await self.client.get_me()
-            add_log(self.account_id, self.account_id, f'Account {self.phone_number} logged in successfully')
+            add_log(self.account_id, self.account_id, f'Login success for {self.phone_number}')
             
             return {
                 'success': True,
-                'authorized': True,
                 'user_id': user.id,
                 'first_name': user.first_name,
                 'last_name': user.last_name if user.last_name else '',
@@ -111,77 +106,29 @@ class TelegramManager:
             }
             
         except SessionPasswordNeededError:
-            add_log(self.account_id, self.account_id, 'Two-factor authentication required')
-            return {'success': False, 'error': '2FA', 'message': 'Two-factor authentication required'}
-        except PhoneNumberInvalidError:
-            add_log(self.account_id, self.account_id, 'Invalid phone number', 'ERROR')
-            return {'success': False, 'error': 'invalid_phone', 'message': 'Invalid phone number'}
-        except UnauthorizedError:
-            add_log(self.account_id, self.account_id, 'Unauthorized access', 'ERROR')
-            return {'success': False, 'error': 'unauthorized', 'message': 'Unauthorized access'}
-        except FloodWaitError as e:
-            add_log(self.account_id, self.account_id, f'FloodWait: {e.seconds} seconds', 'WARNING')
-            return {'success': False, 'error': 'flood_wait', 'message': f'Too many requests. Wait {e.seconds}s'}
+            return {'success': False, 'message': '2FA required'}
+        except PhoneCodeInvalidError:
+            return {'success': False, 'message': 'Invalid OTP code'}
         except Exception as e:
-            error_msg = str(e)
-            add_log(self.account_id, self.account_id, f'Login error: {error_msg}', 'ERROR')
-            return {'success': False, 'error': 'connection_error', 'message': error_msg}
-    
-    async def handle_2fa_password(self, password):
-        """
-        Handle two-factor authentication password.
-        
-        Args:
-            password (str): 2FA password
-            
-        Returns:
-            dict: Result of 2FA attempt
-        """
-        try:
-            await self.client.sign_in(password=password)
-            user = await self.client.get_me()
-            add_log(self.account_id, self.account_id, '2FA authentication successful')
-            
-            return {
-                'success': True,
-                'user_id': user.id,
-                'first_name': user.first_name,
-                'last_name': user.last_name if user.last_name else '',
-                'username': user.username if user.username else '',
-                'is_bot': user.bot
-            }
-        except Exception as e:
-            add_log(self.account_id, self.account_id, f'2FA error: {str(e)}', 'ERROR')
-            return {'success': False, 'error': str(e)}
+            add_log(self.account_id, self.account_id, f'Error: {str(e)}', 'ERROR')
+            return {'success': False, 'message': str(e)}
     
     async def disconnect(self):
-        """
-        Disconnect from Telegram.
-        
-        Returns:
-            bool: True if successful
-        """
+        """Disconnect"""
         try:
             await self.client.disconnect()
-            add_log(self.account_id, self.account_id, 'Disconnected from Telegram')
+            add_log(self.account_id, self.account_id, 'Disconnected')
             return True
-        except Exception as e:
-            add_log(self.account_id, self.account_id, f'Disconnect error: {str(e)}', 'ERROR')
+        except:
             return False
     
     async def get_groups(self):
-        """
-        Get all groups and channels for the account.
-        
-        Returns:
-            list: List of groups/channels with details
-        """
+        """Get all groups/channels"""
         try:
             groups = []
             async for dialog in self.client.iter_dialogs():
                 entity = dialog.entity
                 
-                # Only get groups and channels
                 if isinstance(entity, (Chat, Channel)):
                     group_info = {
                         'id': entity.id,
@@ -195,34 +142,18 @@ class TelegramManager:
             add_log(self.account_id, self.account_id, f'Loaded {len(groups)} groups')
             return groups
             
-        except FloodWaitError as e:
-            add_log(self.account_id, self.account_id, f'FloodWait loading groups: {e.seconds}s', 'WARNING')
-            return []
         except Exception as e:
             add_log(self.account_id, self.account_id, f'Error loading groups: {str(e)}', 'ERROR')
             return []
     
     async def send_message(self, group_id, message, retry_count=0, max_retries=3):
-        """
-        Send a message to a group/channel.
-        
-        Args:
-            group_id (int): Telegram group ID
-            message (str): Message text
-            retry_count (int): Current retry count
-            max_retries (int): Maximum retries
-            
-        Returns:
-            dict: Send result with status and details
-        """
+        """Send message to group"""
         try:
-            # Validate message
             if not message or len(message) > Config.MAX_MESSAGE_LENGTH:
                 return {'success': False, 'error': 'invalid_message'}
             
-            # Send message
             await self.client.send_message(group_id, message)
-            add_log(self.account_id, self.account_id, f'Message sent to group {group_id}')
+            add_log(self.account_id, self.account_id, f'Message sent to {group_id}')
             
             return {'success': True, 'group_id': group_id}
             
@@ -231,52 +162,23 @@ class TelegramManager:
                 await asyncio.sleep(e.seconds)
                 return await self.send_message(group_id, message, retry_count + 1, max_retries)
             else:
-                add_log(self.account_id, self.account_id, 
-                       f'FloodWait - max retries exceeded for group {group_id}', 'ERROR')
-                return {'success': False, 'error': 'flood_wait', 'message': f'Wait {e.seconds} seconds'}
-        
+                return {'success': False, 'error': 'flood_wait'}
         except Exception as e:
-            add_log(self.account_id, self.account_id, f'Error sending message: {str(e)}', 'ERROR')
+            add_log(self.account_id, self.account_id, f'Error: {str(e)}', 'ERROR')
             return {'success': False, 'error': str(e)}
     
     async def is_connected(self):
-        """
-        Check if client is connected.
-        
-        Returns:
-            bool: True if connected
-        """
+        """Check if connected"""
         try:
             return self.client.is_connected()
         except:
             return False
-    
-    async def is_authorized(self):
-        """
-        Check if client is authorized.
-        
-        Returns:
-            bool: True if authorized
-        """
-        try:
-            return await self.client.is_user_authorized()
-        except:
-            return False
 
 def get_or_create_client(account_id):
-    """
-    Get or create a Telegram client for an account.
-    
-    Args:
-        account_id (int): Account ID
-        
-    Returns:
-        TelegramManager: Manager instance or None if account not found
-    """
+    """Get or create client"""
     if account_id in active_clients:
         return active_clients[account_id]
     
-    # Get account details from database
     account = get_account(account_id)
     if not account:
         return None
@@ -292,11 +194,6 @@ def get_or_create_client(account_id):
     return manager
 
 def remove_client(account_id):
-    """
-    Remove a client from active clients.
-    
-    Args:
-        account_id (int): Account ID
-    """
+    """Remove client"""
     if account_id in active_clients:
         del active_clients[account_id]

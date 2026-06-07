@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Telegram Broadcaster{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-6 fw-bold">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </h1>
+        <p class="text-muted">Application overview and statistics</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark border-info h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-title text-muted mb-1">Total Accounts</h6>
+                        <h2 class="text-info mb-0">{{ total_accounts }}</h2>
+                    </div>
+                    <div class="text-info fs-1 opacity-50">
+                        <i class="fas fa-users"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark border-success h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-title text-muted mb-1">Active Accounts</h6>
+                        <h2 class="text-success mb-0">{{ active_accounts }}</h2>
+                    </div>
+                    <div class="text-success fs-1 opacity-50">
+                        <i class="fas fa-circle-check"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark border-warning h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-title text-muted mb-1">Total Groups</h6>
+                        <h2 class="text-warning mb-0">{{ total_groups }}</h2>
+                    </div>
+                    <div class="text-warning fs-1 opacity-50">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark border-danger h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-title text-muted mb-1">Messages Sent</h6>
+                        <h2 class="text-danger mb-0">{{ total_sent }}</h2>
+                    </div>
+                    <div class="text-danger fs-1 opacity-50">
+                        <i class="fas fa-paper-plane"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header bg-secondary">
+                <h5 class="card-title mb-0"><i class="fas fa-link"></i> Quick Links</h5>
+            </div>
+            <div class="card-body">
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('accounts.add_account_page') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-plus"></i> Add Account
+                    </a>
+                    <a href="{{ url_for('groups.list_groups') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-layer-group"></i> Manage Groups
+                    </a>
+                    <a href="{{ url_for('broadcast.broadcast_page') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-paper-plane"></i> Start Broadcast
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header bg-secondary">
+                <h5 class="card-title mb-0"><i class="fas fa-history"></i> Recent Activity</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_logs %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-dark table-hover border-secondary">
+                            <thead class="table-secondary">
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Event</th>
+                                    <th>Level</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_logs %}
+                                    <tr>
+                                        <td>
+                                            <small class="text-muted">
+                                                {{ log.created_at }}
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">{{ log.event_type }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{% if log.level == 'ERROR' %}danger{% elif log.level == 'WARNING' %}warning{% else %}success{% endif %}">
+                                                {{ log.level }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <small>{{ log.message }}</small>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center my-4">
+                        <i class="fas fa-inbox"></i> No recent activity
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

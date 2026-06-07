@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Accounts - Telegram Broadcaster{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div><h1 class="display-6 fw-bold"><i class="fas fa-users"></i> Accounts</h1><p class="text-muted">Manage your Telegram accounts</p></div>
+        <a href="{{ url_for('accounts.add_account_page') }}" class="btn btn-primary btn-lg"><i class="fas fa-plus"></i> Add New Account</a>
+    </div>
+</div>
+<div class="row">
+    {% if accounts %}
+        {% for account in accounts %}
+            <div class="col-md-4 mb-4">
+                <div class="card bg-dark border-{% if account.status == 'authorized' %}success{% elif account.status == 'error' %}danger{% else %}warning{% endif %} h-100">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0"><i class="fas fa-user"></i> {{ account.phone_number }}</h5>
+                            <span class="badge bg-{% if account.status == 'authorized' %}success{% elif account.status == 'error' %}danger{% else %}warning{% endif %}">{{ account.status|upper }}</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        {% if account.username %}<p class="mb-2"><strong>Username:</strong> @{{ account.username }}</p>{% endif %}
+                        {% if account.first_name %}<p class="mb-2"><strong>Name:</strong> {{ account.first_name }} {{ account.last_name or '' }}</p>{% endif %}
+                        <p class="mb-2"><strong>User ID:</strong> <code>{{ account.user_id or 'N/A' }}</code></p>
+                        <p class="mb-0"><strong>Added:</strong> <small class="text-muted">{{ account.created_at }}</small></p>
+                    </div>
+                    <div class="card-footer"><button class="btn btn-sm btn-outline-danger" onclick="deleteAccount({{ account.id }})"><i class="fas fa-trash"></i> Delete</button></div>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-12"><div class="card bg-dark border-secondary"><div class="card-body text-center py-5"><i class="fas fa-inbox" style="font-size: 3rem;"></i><p class="text-muted mt-3 mb-0">No accounts. Click Add New Account to start.</p></div></div></div>
+    {% endif %}
+</div>
+<script>function deleteAccount(id){if(!confirm('Delete this account?'))return;fetch(`/accounts/${id}/delete`,{method:'POST'}).then(r=>r.json()).then(d=>{if(d.success){alert('Deleted');location.reload()}else alert(`Error: ${d.error}`)}).catch(e=>alert('Error'))}</script>
+{% endblock %}

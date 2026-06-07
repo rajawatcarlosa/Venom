@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Logs - Telegram Broadcaster{% endblock %}
+{% block content %}
+<div class="row mb-4"><div class="col-12 d-flex justify-content-between align-items-center"><div><h1 class="display-6 fw-bold"><i class="fas fa-list"></i> Application Logs</h1><p class="text-muted">Real-time application events</p></div><button id="refreshLogsBtn" class="btn btn-primary"><i class="fas fa-sync"></i> Refresh</button></div></div>
+<div class="row"><div class="col-12"><div class="card bg-dark border-secondary"><div class="card-body" style="max-height:600px;overflow-y:auto"><table class="table table-sm table-dark table-hover border-secondary"><thead class="table-secondary"><tr><th width="180">Timestamp</th><th width="100">Level</th><th width="150">Event Type</th><th>Message</th></tr></thead><tbody id="logsTable">{% for log in logs %}<tr><td><small class="text-muted">{{ log.created_at }}</small></td><td><span class="badge bg-{% if log.level == 'ERROR' %}danger{% elif log.level == 'WARNING' %}warning{% else %}success{% endif %}">{{ log.level }}</span></td><td><span class="badge bg-info">{{ log.event_type }}</span></td><td><small>{{ log.message }}</small></td></tr>{% endfor %}</tbody></table></div></div></div></div>
+<script>
+document.getElementById('refreshLogsBtn').addEventListener('click',refreshLogs);
+async function refreshLogs(){try{const r=await fetch('/logs/get?limit=100');const d=await r.json();if(d.success){const tbody=document.getElementById('logsTable');tbody.innerHTML='';d.logs.forEach(log=>{const levelBg=log.level==='ERROR'?'danger':log.level==='WARNING'?'warning':'success';const tr=document.createElement('tr');tr.innerHTML=`<td><small class="text-muted">${log.created_at}</small></td><td><span class="badge bg-${levelBg}">${log.level}</span></td><td><span class="badge bg-info">${log.event_type}</span></td><td><small>${log.message}</small></td>`;tbody.appendChild(tr)})}}catch(e){console.error('Error:',e)}}
+setInterval(refreshLogs,5000);
+</script>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Groups - Telegram Broadcaster{% endblock %}
+{% block content %}
+<div class="row mb-4"><div class="col-12"><h1 class="display-6 fw-bold"><i class="fas fa-layer-group"></i> Group Management</h1><p class="text-muted">Select groups for broadcasting</p></div></div>
+<div class="row">
+    <div class="col-md-3">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header bg-secondary"><h5 class="card-title mb-0">Select Account</h5></div>
+            <div class="card-body">
+                <select id="accountSelect" class="form-select bg-dark text-light border-secondary">
+                    <option value="">Choose an account...</option>
+                    {% for account in accounts %}<option value="{{ account.id }}">{{ account.phone_number }}</option>{% endfor %}
+                </select>
+                <button id="loadGroupsBtn" class="btn btn-primary w-100 mt-3" disabled><i class="fas fa-sync"></i> Load Groups</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header bg-secondary"><h5 class="card-title mb-0"><i class="fas fa-list"></i> Groups & Channels</h5></div>
+            <div class="card-body">
+                <div id="groupsList" style="display:none"><table class="table table-sm table-dark"><thead><tr><th width="50"><input type="checkbox" id="selectAll" class="form-check-input"></th><th>Name</th><th>Type</th><th>Members</th></tr></thead><tbody id="groupsTable"></tbody></table><button id="saveGroupsBtn" class="btn btn-success w-100 mt-3"><i class="fas fa-save"></i> Save Selection</button></div>
+                <div id="loadingSpinner" class="text-center" style="display:none"><div class="spinner-border"></div><p class="mt-2">Loading groups...</p></div>
+                <div id="noGroupsMessage" class="text-center text-muted py-5"><i class="fas fa-inbox" style="font-size:2rem"></i><p class="mt-3">Select account and click Load Groups</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+let currentAccountId=null;document.getElementById('accountSelect').addEventListener('change',function(){currentAccountId=this.value;document.getElementById('loadGroupsBtn').disabled=!currentAccountId});document.getElementById('loadGroupsBtn').addEventListener('click',loadGroups);document.getElementById('selectAll').addEventListener('change',function(){document.querySelectorAll('.group-checkbox').forEach(cb=>cb.checked=this.checked)});document.getElementById('saveGroupsBtn').addEventListener('click',saveGroups);
+async function loadGroups(){if(!currentAccountId)return;document.getElementById('loadingSpinner').style.display='block';document.getElementById('groupsList').style.display='none';document.getElementById('noGroupsMessage').style.display='none';try{const r=await fetch('/groups/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_id:currentAccountId})});const d=await r.json();document.getElementById('loadingSpinner').style.display='none';if(d.success){const tbody=document.getElementById('groupsTable');tbody.innerHTML='';d.groups.forEach(g=>{const row=document.createElement('tr');row.innerHTML=`<td><input type="checkbox" class="form-check-input group-checkbox" value="${g.id}"></td><td>${g.name}</td><td><span class="badge bg-${g.is_channel?'info':'success'}">${g.is_channel?'Channel':'Group'}</span></td><td>${g.members||'N/A'}</td>`;tbody.appendChild(row)});document.getElementById('groupsList').style.display='block'}else{alert(`Error: ${d.error}`);document.getElementById('noGroupsMessage').style.display='block'}}catch(e){document.getElementById('loadingSpinner').style.display='none';alert(`Error: ${e.message}`);document.getElementById('noGroupsMessage').style.display='block'}}
+async function saveGroups(){if(!currentAccountId)return;const ids=Array.from(document.querySelectorAll('.group-checkbox:checked')).map(cb=>parseInt(cb.value));try{const r=await fetch('/groups/update-selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_id:currentAccountId,groups:ids})});const d=await r.json();alert(d.success?`Saved ${ids.length} groups!`:`Error: ${d.error}`)}catch(e){alert(`Error: ${e.message}`)}}
+</script>
+{% endblock %}
